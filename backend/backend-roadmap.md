@@ -22,7 +22,7 @@
 ## 全局约束（每个任务都遵守）
 
 - 包根 `com.recap`，分层 `controller / service / service.impl / mapper / entity / dto / config / exception`。
-- DB `snake_case` ↔ JSON `camelCase`：`mybatis.map-underscore-to-camel-case: true`。
+- DB `snake_case` ↔ JSON `camelCase`：`mybatis.configuration.map-underscore-to-camel-case: true`。
 - **状态枚举**（tech-spec §4.3）：`0=TRANSFERING / 1=TRANSCRIBED / 2=SUMMARIZING / 3=DONE / 4=FAILED`，JSON 输出字符串。
 - **错误码**（tech-spec §4.4）：`0/1001/1002/1003/1004/1005/1006`；成功 HTTP 200 直接返回业务数据，失败 HTTP 4xx/5xx 返回 `{ code, message }`。1003/1004/1005 仅用于同步接口。
 - **时间字段**：JSON 输出 `yyyy-MM-dd HH:mm:ss`。
@@ -97,14 +97,15 @@ spring:
       max-file-size: 100MB
       max-request-size: 110MB
   datasource:
-    url: jdbc:mysql://localhost:3306/recap?useUnicode=true&characterEncoding=utf8mb4&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:3306/recap?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
     username: root
     password: ${MYSQL_PASSWORD}
   profiles:
     active: mock          # 先跑 mock；接真实 ASR/LLM 后移除
 
 mybatis:
-  map-underscore-to-camel-case: true
+  configuration:
+    map-underscore-to-camel-case: true
 
 recap:
   upload-dir: ./data/recordings
@@ -597,4 +598,5 @@ class MessageVO { String role; String content; String createdAt; }
 
 - Task 1 ✅ 已完成（工程初始化，`mvn spring-boot:run` 启动验证通过）。
 - Task 2 ✅ 已完成（建库建表，`recap` 库 + `recording`/`message` 两表，`DESC` 字段与 DDL 一致）。
-- 其余 ⬜ 待做。**下一件事 = Task 3：entity + Mapper。**
+- Task 3 ✅ 已完成（entity + Mapper + `@MapperScan`；10 个集成测试全绿，验证 `map-underscore-to-camel-case` 生效）。
+- 其余 ⬜ 待做。**下一件事 = Task 4：状态枚举 + 错误码 + 全局异常。**
