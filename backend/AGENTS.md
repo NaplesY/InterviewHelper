@@ -8,7 +8,7 @@
 
 ## 技术栈（锁定，勿自行升级大版本）
 
-- Java **17（LTS）**、Spring Boot **3.3.x**、Maven 3.9+
+- Java **17+（LTS，本机用 21）**、Spring Boot **3.3.x**、Maven 3.9+
 - MyBatis（原生，手写 SQL）+ MySQL 8.0 + HikariCP
 - Spring WebClient（调 DeepSeek / ASR 的 HTTP 客户端）
 - ffmpeg（命令行转码，**前置依赖**，需本机安装并进 PATH）

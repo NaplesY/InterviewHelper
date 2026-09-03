@@ -47,7 +47,7 @@
 
 | 项 | 选型 | 版本锚点 |
 |---|---|---|
-| 语言 | Java | **JDK 17（LTS）** |
+| 语言 | Java | **JDK 17+（LTS，本机用 21）** |
 | 框架 | Spring Boot | **3.x（推荐 3.3.x）** |
 | 构建 | Maven | 3.9+ |
 | ORM | MyBatis（原生，手写 SQL） | mybatis-spring-boot-starter 3.x |
