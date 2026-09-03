@@ -596,4 +596,5 @@ class MessageVO { String role; String content; String createdAt; }
 ## 当前状态
 
 - Task 1 ✅ 已完成（工程初始化，`mvn spring-boot:run` 启动验证通过）。
-- 其余 ⬜ 待做。**下一件事 = Task 2：建库建表。**
+- Task 2 ✅ 已完成（建库建表，`recap` 库 + `recording`/`message` 两表，`DESC` 字段与 DDL 一致）。
+- 其余 ⬜ 待做。**下一件事 = Task 3：entity + Mapper。**
