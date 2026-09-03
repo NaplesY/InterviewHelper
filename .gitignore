@@ -1,0 +1,35 @@
+# ===== 构建产物 =====
+build/
+target/
+.gradle/
+out/
+bin/
+
+# ===== IDE =====
+.idea/
+*.iml
+.vscode/
+*.classpath
+*.project
+.settings/
+
+# ===== 本地配置 / 密钥（绝不入库）=====
+.env
+.env.*
+!.env.example
+local.properties
+*.local.properties
+
+# ===== 录音文件（测试素材不入库）=====
+*.m4a
+*.amr
+*.wav
+*.mp3
+*.3gp
+data/
+recordings/
+
+# ===== 系统 =====
+.DS_Store
+Thumbs.db
+*.log
