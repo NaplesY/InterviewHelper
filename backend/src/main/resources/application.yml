@@ -8,14 +8,15 @@ spring:
       max-file-size: 100MB
       max-request-size: 110MB
   datasource:
-    url: jdbc:mysql://localhost:3306/recap?useUnicode=true&characterEncoding=utf8mb4&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:3306/recap?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
     username: root
     password: ${MYSQL_PASSWORD}
   profiles:
     active: mock          # 先跑 mock；接真实 ASR/LLM 后移除
 
 mybatis:
-  map-underscore-to-camel-case: true
+  configuration:
+    map-underscore-to-camel-case: true
 
 recap:
   upload-dir: ./data/recordings

@@ -116,7 +116,7 @@ com.recap
 
 ### 4.2 数据模型（MySQL DDL）
 
-**命名映射规则（写死）**：DB 字段 `snake_case`，JSON 字段 `camelCase`。MyBatis 开启 `map-underscore-to-camel-case: true`，前后端统一用 camelCase。
+**命名映射规则（写死）**：DB 字段 `snake_case`，JSON 字段 `camelCase`。MyBatis 开启 `mybatis.configuration.map-underscore-to-camel-case: true`，前后端统一用 camelCase。
 
 ```sql
 CREATE TABLE recording (
@@ -322,12 +322,13 @@ spring:
       max-file-size: 100MB        # 支持 ≥50MB 录音上传（默认仅 1MB，必须改）
       max-request-size: 110MB
   datasource:
-    url: jdbc:mysql://localhost:3306/recap?useUnicode=true&characterEncoding=utf8mb4
+    url: jdbc:mysql://localhost:3306/recap?useUnicode=true&characterEncoding=UTF-8
     username: root
     password: ${MYSQL_PASSWORD}
 
 mybatis:
-  map-underscore-to-camel-case: true
+  configuration:
+    map-underscore-to-camel-case: true
 
 recap:
   upload-dir: ./data/recordings        # 录音文件本地存储目录

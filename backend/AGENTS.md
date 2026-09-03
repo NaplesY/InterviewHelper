@@ -16,7 +16,7 @@
 ## 编码约定
 
 - 包根 `com.recap`，分层 `controller / service / mapper / entity / dto / config / exception`。
-- DB `snake_case` ↔ JSON `camelCase`（`mybatis.map-underscore-to-camel-case: true`）。
+- DB `snake_case` ↔ JSON `camelCase`（`mybatis.configuration.map-underscore-to-camel-case: true`）。
 - 状态枚举 `RecordingStatus`：`0=TRANSFERING / 1=TRANSCRIBED / 2=SUMMARIZING / 3=DONE / 4=FAILED`，JSON 输出字符串。
 - 统一错误体 `{ "code": <int>, "message": "<str>" }`，错误码表见 tech-spec §4.4。
 
