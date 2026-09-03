@@ -17,15 +17,15 @@
 
 - 包根 `com.recap`，分层 `controller / service / mapper / entity / dto / config / exception`。
 - DB `snake_case` ↔ JSON `camelCase`（`mybatis.map-underscore-to-camel-case: true`）。
-- 状态枚举 `RecordingStatus`：`0=TRANSFERING / 1=DONE / 2=FAILED`，JSON 输出字符串。
+- 状态枚举 `RecordingStatus`：`0=TRANSFERING / 1=TRANSCRIBED / 2=SUMMARIZING / 3=DONE / 4=FAILED`，JSON 输出字符串。
 - 统一错误体 `{ "code": <int>, "message": "<str>" }`，错误码表见 tech-spec §4.4。
 
 ## 关键约束
 
 - **mock 先行**：`AsrService` / `LlmService` 先写 mock 实现打通链路，再接真实 API。
-- **异步转写**：`@Async` + `ThreadPoolTaskExecutor`，上传后立即返回，后台「转码 → 转写 → 总结」。
+- **异步转写**：`@Async` + `ThreadPoolTaskExecutor`；文件先**同步落盘**再返回 id，后台「转码 → 转写 → 总结」。
 - **SSE**：Spring MVC `SseEmitter` + WebClient 流式，`data: [DONE]` 结束。
-- **密钥走环境变量**（`MYSQL_PASSWORD` / `DEEPSEEK_API_KEY` / `ASR_APP_ID` / `ASR_API_KEY`），绝不硬编码、绝不提交 Git。
+- **密钥走环境变量**（`MYSQL_PASSWORD` / `DEEPSEEK_API_KEY` / `ASR_APP_ID` / `ASR_SECRET_KEY`），绝不硬编码、绝不提交 Git。
 - `server.address=0.0.0.0`（手机能连）。
 - 转码：ffmpeg 转 16k 单声道 wav 再送 ASR。
 

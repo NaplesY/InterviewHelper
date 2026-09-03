@@ -53,7 +53,7 @@
 | ORM | MyBatis（原生，手写 SQL） | mybatis-spring-boot-starter 3.x |
 | 数据库 | MySQL | 8.0+ |
 | 连接池 | HikariCP（Spring Boot 默认） | — |
-| HTTP 客户端（调 LLM/ASR） | Spring WebClient（WebFlux） | Spring Boot 自带 |
+| HTTP 客户端（调 LLM/ASR） | Spring WebClient（WebFlux） | 需引 `spring-boot-starter-webflux`（或 `reactor-netty`），非 `starter-web` 自带 |
 | 转码 | ffmpeg（命令行，`ProcessBuilder` 调用） | 需本机安装 |
 
 ### 2.2 Android 客户端
@@ -126,7 +126,7 @@ CREATE TABLE recording (
   file_size   BIGINT,
   duration_ms BIGINT,                          -- 时长（毫秒）
   format      VARCHAR(16),                     -- m4a/amr/wav/mp3...
-  status      TINYINT NOT NULL DEFAULT 0,      -- 0=转写中 1=已完成 2=失败
+  status      TINYINT NOT NULL DEFAULT 0,      -- 0=转写中 1=转写完成 2=总结中 3=已完成 4=失败
   transcript  LONGTEXT,                        -- 转写全文
   summary     TEXT,                            -- AI 总结
   tags        VARCHAR(255),                    -- 逗号分隔
@@ -148,11 +148,24 @@ CREATE TABLE message (
 
 | DB 值 | JSON 字符串 | 含义 |
 |---|---|---|
-| 0 | `TRANSFERING` | 转写中 |
-| 1 | `DONE` | 已完成（转写 + 总结都完成） |
-| 2 | `FAILED` | 失败（`errorMsg` 有原因） |
+| 0 | `TRANSFERING` | 转码/转写进行中 |
+| 1 | `TRANSCRIBED` | 转写完成，总结待生成或已失败（可手动重试） |
+| 2 | `SUMMARIZING` | 转写完成，总结生成中 |
+| 3 | `DONE` | 转写 + 总结都完成 |
+| 4 | `FAILED` | 转码或转写失败（文字稿不可用），`errorMsg` 记录原因 |
 
-> JSON API 一律用字符串枚举 `TRANSFERING / DONE / FAILED`；后端用 `enum RecordingStatus` 与 TINYINT 互转。
+> JSON API 一律用字符串枚举 `TRANSFERING / TRANSCRIBED / SUMMARIZING / DONE / FAILED`；后端用 `enum RecordingStatus` 与 TINYINT 互转。
+
+**状态流转**：
+
+```
+上传 → TRANSFERING（转码 → 转写）
+  ├─ 转写成功 → SUMMARIZING → 总结成功 → DONE
+  ├─ 转写成功 → 总结失败 → TRANSCRIBED（errorMsg=总结失败原因，文字稿仍可读，可手动重试 ⑨）
+  └─ 转码/转写失败 → FAILED（errorMsg=失败原因）
+```
+
+> `errorMsg` 语义：`FAILED` 时 = 转码/转写失败原因；`TRANSCRIBED` 且非空时 = 总结失败原因。这样仅靠「状态 + errorMsg」即可定位失败发生在哪一步，无需额外字段。
 
 ### 4.4 API 契约
 
@@ -173,6 +186,8 @@ CREATE TABLE message (
 | 1004 | 502 | ASR 转写失败 |
 | 1005 | 502 | LLM 调用失败 |
 | 1006 | 400 | 参数校验失败 |
+
+> 说明：上传后的转写/总结是**异步**的，失败不体现在上传接口的 HTTP 码，而是落在 `status` + `errorMsg` 字段（见 4.3）。错误码 `1003/1004/1005` 仅用于**同步接口**（如 ⑨ 手动重试总结）或同步阶段的校验失败。
 
 #### ① 上传录音
 
@@ -220,6 +235,7 @@ CREATE TABLE message (
 ```json
 { "status": "TRANSFERING", "errorMsg": null }
 ```
+> `status` 取值见 4.3（5 个值）。客户端在 `TRANSFERING`/`SUMMARIZING` 时轮询此接口。
 
 #### ⑤ 改标题/标签
 
@@ -262,22 +278,29 @@ data: [DONE]
 #### ⑨ 手动重试总结
 
 `POST /api/recordings/{id}/summary`  → `200 { "summary": "……" }`
-> 转写完成但总结失败/为空时，客户端可手动触发。
+> 仅当 `status=TRANSCRIBED`（转写完成、总结失败/为空）时可调用；同步执行并返回 summary，成功后 `status=DONE`。若 LLM 调用失败，返回 `502 { "code": 1005, ... }`。
 
 ### 4.5 关键机制
 
 **① 异步转写 + 总结链路**
-- 上传接口只落库 + 返回 id；用 `@Async` + `ThreadPoolTaskExecutor`（见 `AsyncConfig`）执行：
-  `转码(ffmpeg → 16k wav) → AsrService.transcribe() → 存 transcript → LlmService.summarize() → 存 summary → status=DONE`。
-- 任一步失败：`status=FAILED` + `errorMsg`。
+- **上传接口的同步边界**：`MultipartFile` 是请求作用域（请求结束即回收），@Async 线程拿不到，所以 `file` 必须**同步**落盘到 `file_path` 并落库（status=TRANSFERING）后，才返回 id。
+- **异步阶段**（`@Async` + `ThreadPoolTaskExecutor`，见 `AsyncConfig`）执行：
+  `读 file_path → 转码(ffmpeg → 16k wav) → AsrService.transcribe() → 存 transcript（status=SUMMARIZING）→ LlmService.summarize() → 存 summary → status=DONE`。
+- 失败处理（见 4.3 状态流转）：
+  - 转码/转写失败：`status=FAILED` + `errorMsg`（文字稿不可用）。
+  - 总结失败：`status=TRANSCRIBED` + `errorMsg`（文字稿仍可读，可手动重试 ⑨）。
 
 **② 音频转码**
 - 系统录音机多为 m4a/amr，ASR 通常要 16k 单声道 wav/pcm。
 - 统一用 ffmpeg：`ffmpeg -y -i input.m4a -ar 16000 -ac 1 -c:a pcm_s16le output.wav`。
+- **转码产物（中间 wav）在送入 ASR 后立即删除**，只保留原始录音文件——16k `pcm_s16le` wav 未压缩，1 小时约 115MB，比原 m4a 还大，不清理会快速吃满磁盘。
 - ffmpeg 是**前置依赖**（本机安装并加入 PATH），agent 需自检。
 
 **③ SSE 流式**
 - 用 Spring MVC `SseEmitter`；`LlmServiceImpl` 用 `WebClient` 流式请求 DeepSeek（`stream: true`），把 `choices[].delta.content` 转成 emitter 的 `data:` 事件。
+- **存库与客户端连接解耦**：assistant 完整回复的落库点绑定在 **DeepSeek 流是否正常收完**（`Flux.doOnComplete`），**不绑定** `SseEmitter` 的 `onCompletion` —— 客户端断不断都不影响落库。
+  - 客户端中途断开：`emitter.send(...)` 抛异常须 `try-catch` 吞掉，**不能**向上游传播导致 DeepSeek 请求被取消。
+  - DeepSeek 自身异常：`doOnError` 兜底，把已累积部分 + `[回复中断]` 标记也存一条，保证 user 消息总有对应 assistant 落库，不出现孤儿消息。
 
 **④ 追问上下文拼装（ChatService）**
 - system prompt 角色：「你是面试复盘助手，基于用户某场面试的转写内容，帮他复盘、答疑」。
@@ -294,6 +317,10 @@ server:
   port: 8080
 
 spring:
+  servlet:
+    multipart:
+      max-file-size: 100MB        # 支持 ≥50MB 录音上传（默认仅 1MB，必须改）
+      max-request-size: 110MB
   datasource:
     url: jdbc:mysql://localhost:3306/recap?useUnicode=true&characterEncoding=utf8mb4
     username: root
@@ -305,16 +332,16 @@ mybatis:
 recap:
   upload-dir: ./data/recordings        # 录音文件本地存储目录
   asr:
-    provider: xunfei                   # 默认讯飞，见开放项
+    provider: xunfei                   # 讯飞「语音转写（长音频 lfasr）」
     app-id: ${ASR_APP_ID}
-    api-key: ${ASR_API_KEY}
+    secret-key: ${ASR_SECRET_KEY}      # 讯飞接口密钥，用于签名
   llm:
     base-url: https://api.deepseek.com
     api-key: ${DEEPSEEK_API_KEY}
     model: deepseek-chat
 ```
 
-> 环境变量：`MYSQL_PASSWORD` / `ASR_APP_ID` / `ASR_API_KEY` / `DEEPSEEK_API_KEY`。提供 `.env.example` 模板，真实值放本机 `.env`（已 gitignore）。
+> 环境变量：`MYSQL_PASSWORD` / `ASR_APP_ID` / `ASR_SECRET_KEY` / `DEEPSEEK_API_KEY`。提供 `.env.example` 模板，真实值放本机 `.env`（已 gitignore）。
 
 ---
 
@@ -378,7 +405,7 @@ recap:
 
 | 项 | 待定 | 影响 |
 |---|---|---|
-| ASR 厂商 | 讯飞 vs 阿里 vs 腾讯（看免费额度 + m4a/amr 支持） | 只影响 `AsrServiceImpl`，接口不变 |
+| ASR 厂商 | ✅ 已定：讯飞「语音转写（长音频 lfasr）」，凭据 `app_id` + `secret_key` | 只影响 `AsrServiceImpl`，接口不变 |
 | MySQL 安装 | Docker 还是本机安装（Windows 环境） | 只影响本地环境，不影响代码 |
 | 后端/Android 包名 | `com.recap` / `com.recap.app`（实施时统一确认） | 需前后端一致 |
 | 跨录音对话 | MVP 严格单录音内；是否支持全局对话待定 | 影响 ChatService 上下文范围 |
