@@ -599,4 +599,5 @@ class MessageVO { String role; String content; String createdAt; }
 - Task 1 ✅ 已完成（工程初始化，`mvn spring-boot:run` 启动验证通过）。
 - Task 2 ✅ 已完成（建库建表，`recap` 库 + `recording`/`message` 两表，`DESC` 字段与 DDL 一致）。
 - Task 3 ✅ 已完成（entity + Mapper + `@MapperScan`；10 个集成测试全绿，验证 `map-underscore-to-camel-case` 生效）。
-- 其余 ⬜ 待做。**下一件事 = Task 4：状态枚举 + 错误码 + 全局异常。**
+- Task 4 ✅ 已完成（状态枚举 + 错误码 + 全局异常；11 个单测 + 全量 21 测试绿，含 `GlobalExceptionHandlerTest` 覆盖 `BizException→404 {code:1001}`）。
+- 其余 ⬜ 待做。**下一件事 = Task 5：文件上传接口。**
